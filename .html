@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call - Tuệ</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f9; padding: 20px; }
+        video { width: 45%; max-width: 400px; border-radius: 10px; background: #000; margin: 10px; border: 2px solid #333; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+    <h2>Xin chào, Tuệ (ID: tue12345)</h2>
+    <div>
+        <video id="myVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+    <br>
+    <button id="callButton">Gọi cho Trung (trung6011)</button>
+    <p id="status">Đang kết nối server...</p>
+
+    <script>
+        // Khởi tạo Peer với ID cố định của Tuệ
+        const peer = new Peer('tue12345');
+        let myStream;
+
+        const myVideo = document.getElementById('myVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const statusText = document.getElementById('status');
+        const callButton = document.getElementById('callButton');
+
+        // Bật Camera và Micro
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                myStream = stream;
+                myVideo.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Lỗi truy cập camera/micro:", err);
+                statusText.innerText = "Không thể mở camera/micro!";
+            });
+
+        // Khi kết nối thành công với Peer Server
+        peer.on('open', id => {
+            statusText.innerText = "Đã sẵn sàng! ID của bạn là: " + id;
+        });
+
+        // Xử lý khi TỰ GỌI cho Trung
+        callButton.addEventListener('click', () => {
+            statusText.innerText = "Đang gọi cho Trung...";
+            const call = peer.call('trung6011', myStream); // Gọi ID của Trung
+            
+            call.on('stream', remoteStream => {
+                remoteVideo.srcObject = remoteStream;
+                statusText.innerText = "Đang trò chuyện với Trung!";
+            });
+        });
+
+        // Xử lý khi NHẬN CUỘC GỌI từ Trung
+        peer.on('call', call => {
+            statusText.innerText = "Trung đang gọi! Đang kết nối...";
+            call.answer(myStream); // Tự động trả lời
+            
+            call.on('stream', remoteStream => {
+                remoteVideo.srcObject = remoteStream;
+                statusText.innerText = "Đang trò chuyện!";
+            });
+        });
+    </script>
+</body>
+</html>
