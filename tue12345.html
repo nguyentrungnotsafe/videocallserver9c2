@@ -19,24 +19,23 @@
         .video-container { display: flex; justify-content: center; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         video { width: 45%; min-width: 280px; background: #111; border-radius: 8px; border: 2px solid #ddd; }
         #incomingCallUI { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 20px; border-radius: 10px; border: 2px solid #007bff; z-index: 1000; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        #callSection { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>Xin chào, Tuệ (tue12345)</h2>
-        <div id="initSection">
-            <p>Bấm để kích hoạt hệ thống và Camera</p>
-            <button class="btn-primary" onclick="initApp()">Bật Camera & Kết nối</button>
-        </div>
-        <div id="callSection">
-            <p id="status" style="color: green;">Đã kết nối máy chủ! Sẵn sàng gọi.</p>
+        <p id="status" style="color: orange;">Đang tải Camera và kết nối máy chủ...</p>
+        
+        <div id="callSection" style="display: none;">
             <div class="search-container">
                 <input type="text" id="remoteIdInput" placeholder="Tìm ID người gọi..." oninput="onSearchInput()">
                 <div id="suggestions" class="suggestions-box"></div>
             </div>
-            <button class="btn-primary" onclick="makeCall()">📞 Gọi ngay</button>
-            <button class="btn-danger" onclick="endCall()" style="display:none;" id="endCallBtn">❌ Kết thúc</button>
+            <div>
+                <button class="btn-primary" onclick="makeCall('audio')">📞 Chỉ gọi</button>
+                <button class="btn-success" onclick="makeCall('video')">📹 Gọi Video</button>
+                <button class="btn-danger" onclick="endCall()" style="display:none;" id="endCallBtn">❌ Kết thúc</button>
+            </div>
             <div class="controls">
                 <button class="btn-secondary" id="micBtn" onclick="toggleMic()">🎤 Tắt Mic</button>
                 <button class="btn-secondary" id="camBtn" onclick="toggleVideo()">📷 Tắt Cam</button>
@@ -48,9 +47,11 @@
             </div>
         </div>
     </div>
+    
     <div id="incomingCallUI">
         <h3 id="callerName">Cuộc gọi đến...</h3>
-        <button class="btn-success" onclick="acceptCall()">✅ Chấp nhận</button>
+        <button class="btn-primary" onclick="acceptCall('audio')">📞 Trả lời (Chỉ Mic)</button>
+        <button class="btn-success" onclick="acceptCall('video')">📹 Trả lời (Có Video)</button>
         <button class="btn-danger" onclick="rejectCall()">❌ Từ chối</button>
     </div>
     <audio id="ringtone" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" loop></audio>
@@ -62,34 +63,27 @@
         let peer, localStream, currentCall, incomingCall;
         let isMicOn = true, isCamOn = true, currentFacingMode = 'user';
 
-        const localVideo = document.getElementById('localVideo'), remoteVideo = document.getElementById('remoteVideo'), ringtone = document.getElementById('ringtone'), remoteInput = document.getElementById('remoteIdInput'), suggestionsBox = document.getElementById('suggestions');
+        const localVideo = document.getElementById('localVideo'), remoteVideo = document.getElementById('remoteVideo'), ringtone = document.getElementById('ringtone'), remoteInput = document.getElementById('remoteIdInput'), suggestionsBox = document.getElementById('suggestions'), statusText = document.getElementById('status'), callSection = document.getElementById('callSection');
 
-        async function initApp() {
+        window.addEventListener('load', async () => {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
                 localVideo.srcObject = localStream;
-                document.getElementById('initSection').style.display = 'none';
-                document.getElementById('callSection').style.display = 'block';
                 peer = new Peer(myId);
+                peer.on('open', (id) => { statusText.innerText = '✅ Đã sẵn sàng!'; statusText.style.color = 'green'; callSection.style.display = 'block'; });
                 peer.on('call', (call) => {
                     incomingCall = call; document.getElementById('callerName').innerText = call.peer + " đang gọi!";
-                    document.getElementById('incomingCallUI').style.display = 'block'; ringtone.play();
+                    document.getElementById('incomingCallUI').style.display = 'block'; 
+                    ringtone.play().catch(e => console.log("Trình duyệt chặn autoplay chuông."));
                 });
-            } catch (err) { alert("Không thể truy cập Camera/Micro!"); }
-        }
+                peer.on('error', (err) => { statusText.innerText = 'Lỗi: ' + err.type; statusText.style.color = 'red'; });
+            } catch (err) { statusText.innerText = "❌ Lỗi: Vui lòng cấp quyền Camera/Micro!"; statusText.style.color = 'red'; }
+        });
 
-        function toggleMic() {
-            if (!localStream) return; isMicOn = !isMicOn; localStream.getAudioTracks()[0].enabled = isMicOn;
-            document.getElementById('micBtn').innerText = isMicOn ? '🎤 Tắt Mic' : '🔇 Bật Mic';
-            document.getElementById('micBtn').style.backgroundColor = isMicOn ? '#6c757d' : '#dc3545';
-        }
-
-        function toggleVideo() {
-            if (!localStream) return; isCamOn = !isCamOn; localStream.getVideoTracks()[0].enabled = isCamOn;
-            document.getElementById('camBtn').innerText = isCamOn ? '📷 Tắt Cam' : '🚫 Bật Cam';
-            document.getElementById('camBtn').style.backgroundColor = isCamOn ? '#6c757d' : '#dc3545';
-        }
-
+        function updateBtnUI(id, isOn, onText, offText) { const btn = document.getElementById(id); btn.innerText = isOn ? offText : onText; btn.style.backgroundColor = isOn ? '#6c757d' : '#dc3545'; }
+        function toggleMic() { if (!localStream) return; isMicOn = !isMicOn; localStream.getAudioTracks()[0].enabled = isMicOn; updateBtnUI('micBtn', isMicOn, '🔇 Bật Mic', '🎤 Tắt Mic'); }
+        function toggleVideo() { if (!localStream) return; isCamOn = !isCamOn; localStream.getVideoTracks()[0].enabled = isCamOn; updateBtnUI('camBtn', isCamOn, '🚫 Bật Cam', '📷 Tắt Cam'); }
+        
         async function switchCamera() {
             if (!localStream) return;
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
@@ -112,15 +106,23 @@
             if (matches.length > 0) {
                 matches.forEach(id => {
                     const item = document.createElement('div'); item.className = 'suggestion-item'; item.innerText = id;
-                    item.onclick = () => { remoteInput.value = id; suggestionsBox.style.display = 'none'; };
-                    suggestionsBox.appendChild(item);
-                });
-                suggestionsBox.style.display = 'block';
+                    item.onclick = () => { remoteInput.value = id; suggestionsBox.style.display = 'none'; }; suggestionsBox.appendChild(item);
+                }); suggestionsBox.style.display = 'block';
             } else { suggestionsBox.style.display = 'none'; }
         }
 
-        function makeCall() { const remoteId = remoteInput.value.trim(); if (!remoteId) return; currentCall = peer.call(remoteId, localStream); handleEvents(currentCall); }
-        function acceptCall() { document.getElementById('incomingCallUI').style.display = 'none'; ringtone.pause(); ringtone.currentTime = 0; if (incomingCall) { currentCall = incomingCall; currentCall.answer(localStream); handleEvents(currentCall); } }
+        function makeCall(type) { 
+            const remoteId = remoteInput.value.trim(); if (!remoteId || !localStream) return; 
+            isCamOn = (type === 'video'); localStream.getVideoTracks()[0].enabled = isCamOn; updateBtnUI('camBtn', isCamOn, '🚫 Bật Cam', '📷 Tắt Cam');
+            currentCall = peer.call(remoteId, localStream); handleEvents(currentCall); 
+        }
+        function acceptCall(type) { 
+            document.getElementById('incomingCallUI').style.display = 'none'; ringtone.pause(); ringtone.currentTime = 0; 
+            if (incomingCall && localStream) { 
+                isCamOn = (type === 'video'); localStream.getVideoTracks()[0].enabled = isCamOn; updateBtnUI('camBtn', isCamOn, '🚫 Bật Cam', '📷 Tắt Cam');
+                currentCall = incomingCall; currentCall.answer(localStream); handleEvents(currentCall); 
+            } 
+        }
         function rejectCall() { document.getElementById('incomingCallUI').style.display = 'none'; ringtone.pause(); ringtone.currentTime = 0; if (incomingCall) { incomingCall.close(); incomingCall = null; } }
         function endCall() { if (currentCall) currentCall.close(); remoteVideo.srcObject = null; document.getElementById('endCallBtn').style.display = 'none'; }
         function handleEvents(call) { document.getElementById('endCallBtn').style.display = 'inline-block'; call.on('stream', stream => { remoteVideo.srcObject = stream; }); call.on('close', () => { remoteVideo.srcObject = null; document.getElementById('endCallBtn').style.display = 'none'; }); }
